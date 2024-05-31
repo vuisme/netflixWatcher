@@ -61,6 +61,7 @@ def fetch_last_unseen_email():
     mail.select("inbox")
     print(mail)
     _, email_ids = mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')')
+    print(mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')'))
     email_ids = email_ids[0].split()
     print(email_ids)
     if email_ids:
