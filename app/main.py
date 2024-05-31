@@ -26,9 +26,11 @@ def extract_links(text):
 
 
 def extract_codes(text):
+    """Finds the 4-digit code after 'Enter this code to sign in'"""
     codes = re.search(r'(?<=Enter this code to sign in\s)\d{4}', text)
-    print(codes)
-    return codes
+    if codes:
+        return codes.group()
+    return None
 
 
 def open_link_with_selenium(body):
@@ -82,7 +84,8 @@ def fetch_last_unseen_email():
                     bodyraw = part.get_payload()
                     print(bodyraw)
                     otpcode = extract_codes(body)
-                    print(otpcode)
+                    if otpcode:
+                        print(f'Mã OTP là: {otpcode}')
                     open_link_with_selenium(body)
         else:
             body = msg.get_payload(decode=True).decode()
