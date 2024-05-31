@@ -67,7 +67,9 @@ def fetch_last_unseen_email():
         _, msg_data = mail.fetch(email_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
         print('Phát hiện yêu cầu xác thực mới:')
-        print(email_ids)
+        print(msg)
+        print('Message: {0}\n'.format(email_id))
+	    pprint.pprint(msg_data[0][1])
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
