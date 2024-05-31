@@ -60,21 +60,14 @@ def fetch_last_unseen_email():
     mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
     mail.login(EMAIL_LOGIN, EMAIL_PASSWORD)
     mail.select("inbox")
-    print(mail)
     _, email_ids = mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')')
-    tmp, data = mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')')
-    for num in data[0].split():
-        tmp, data = mail.fetch(num, '(RFC822)')
-        print('Message: {0}\n'.format(num))
-        pprint.pprint(data[0][1])
-        break
     email_ids = email_ids[0].split()
-    print(email_ids)
     if email_ids:
         email_id = email_ids[-1]
         _, msg_data = mail.fetch(email_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
-
+        print('Phát hiện yêu cầu xác thực mới:')
+        print(email_ids)
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
