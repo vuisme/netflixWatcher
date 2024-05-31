@@ -62,7 +62,7 @@ def fetch_last_unseen_email():
     mail.select("inbox")
     print(mail)
     _, email_ids = mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')')
-    tmp, data = mail.search(None, 'ALL')
+    tmp, data = mail.search(None, '(ALL FROM ' + NETFLIX_EMAIL_SENDER + ')')
     for num in data[0].split():
         tmp, data = mail.fetch(num, '(RFC822)')
         print('Message: {0}\n'.format(num))
