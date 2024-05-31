@@ -67,7 +67,7 @@ def fetch_last_unseen_email():
         email_id = email_ids[-1]
         _, msg_data = mail.fetch(email_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
-        console.log(msg)
+        print(msg)
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
