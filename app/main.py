@@ -27,6 +27,7 @@ def extract_links(text):
 
 def extract_codes(text):
     codes = re.search(r'(?<=Enter this code to sign in\s)\d{4}', text)
+    print(codes)
     return codes
 
 
