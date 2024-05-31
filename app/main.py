@@ -25,6 +25,11 @@ def extract_links(text):
     return urls
 
 
+def extract_codes(text):
+    code = re.search(r'(?<=Enter this code to sign in\s)\d{4}', text)
+    return codes
+
+
 def open_link_with_selenium(body):
     """Opens Selenium and clicks a button to confirm connection"""
     links = extract_links(body)
@@ -75,6 +80,8 @@ def fetch_last_unseen_email():
                     body = part.get_payload(decode=True).decode()
                     bodyraw = part.get_payload()
                     print(bodyraw)
+                    otpcode = extract_codes(body)
+                    print(otpcode)
                     open_link_with_selenium(body)
         else:
             body = msg.get_payload(decode=True).decode()
