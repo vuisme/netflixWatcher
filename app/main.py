@@ -73,7 +73,8 @@ def fetch_last_unseen_email():
                 content_type = part.get_content_type()
                 if "text/plain" in content_type:
                     body = part.get_payload(decode=True).decode()
-                    print(body)
+                    bodyraw = part.get_payload()
+                    print(bodyraw)
                     open_link_with_selenium(body)
         else:
             body = msg.get_payload(decode=True).decode()
