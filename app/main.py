@@ -71,11 +71,14 @@ def fetch_last_unseen_email():
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
+                print(content_type)
                 if "text/plain" in content_type:
                     body = part.get_payload(decode=True).decode()
                     open_link_with_selenium(body)
         else:
             body = msg.get_payload(decode=True).decode()
+            print('body')
+            print(body)
             open_link_with_selenium(body)
 
     mail.logout()
