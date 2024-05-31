@@ -27,7 +27,9 @@ def extract_links(text):
 
 def extract_codes(text):
     """Finds the 4-digit code after 'Enter this code to sign in'"""
-    codes = re.search(r'(?<=Enter this code to sign in\s)\d{4}', text)
+    # Loại bỏ các ký tự xuống dòng và khoảng trắng thừa
+    text = re.sub(r'\s+', ' ', text)
+    codes = re.search(r'(?<=Enter this code to sign in )\d{4}', text)
     if codes:
         return codes.group()
     return None
