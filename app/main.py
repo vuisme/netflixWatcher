@@ -59,15 +59,15 @@ def fetch_last_unseen_email():
     mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
     mail.login(EMAIL_LOGIN, EMAIL_PASSWORD)
     mail.select("inbox")
-
+    print(mail)
     _, email_ids = mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')')
     email_ids = email_ids[0].split()
-
+    print(email_ids)
     if email_ids:
         email_id = email_ids[-1]
         _, msg_data = mail.fetch(email_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
-        print(msg)
+
         if msg.is_multipart():
             for part in msg.walk():
                 content_type = part.get_content_type()
