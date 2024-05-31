@@ -4,6 +4,7 @@ import email
 import re
 import time
 import os
+import pprint
 from selenium import webdriver
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
