@@ -4,7 +4,6 @@ import email
 import re
 import time
 import os
-import pprint
 from selenium import webdriver
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
@@ -78,22 +77,35 @@ def fetch_last_unseen_email():
         _, msg_data = mail.fetch(email_id, "(RFC822)")
         msg = email.message_from_bytes(msg_data[0][1])
         print('Phát hiện yêu cầu xác thực mới')
-        if msg.is_multipart():
-            for part in msg.walk():
-                content_type = part.get_content_type()
-                if "text/plain" in content_type:
-                    body = part.get_payload(decode=True).decode()
-                    bodyraw = part.get_payload()
-                    print(bodyraw)
-                    otpcode = extract_codes(body)
-                    if otpcode:
-                        print(f'Mã OTP là: {otpcode}')
-                    open_link_with_selenium(body)
+
+        # Kiểm tra tiêu đề của email
+        subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
+        if 'Sign-in code' in subject:
+            print('Email chứa tiêu đề "Sign-in code"')
+            if msg.is_multipart():
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if "text/plain" in content_type:
+                        body = part.get_payload(decode=True).decode()
+                        otpcode = extract_codes(body)
+                        if otpcode:
+                            print(f'Mã OTP là: {otpcode}')
+            else:
+                body = msg.get_payload(decode=True).decode()
+                otpcode = extract_codes(body)
+                if otpcode:
+                    print(f'Mã OTP là: {otpcode}')
         else:
-            body = msg.get_payload(decode=True).decode()
-            print('body')
-            print(body)
-            open_link_with_selenium(body)
+            print('Email không chứa tiêu đề "Sign-in code", trích xuất liên kết')
+            if msg.is_multipart():
+                for part in msg.walk():
+                    content_type = part.get_content_type()
+                    if "text/plain" in content_type:
+                        body = part.get_payload(decode=True).decode()
+                        open_link_with_selenium(body)
+            else:
+                body = msg.get_payload(decode=True).decode()
+                open_link_with_selenium(body)
 
     mail.logout()
 
