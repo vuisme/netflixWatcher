@@ -102,7 +102,7 @@ def fetch_last_unseen_email():
 
         # Kiểm tra tiêu đề của email
         subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
-        if 'Sign-in code' in subject:
+        if 'sign-in code' in subject:
             print('Email chứa tiêu đề "Sign-in code"')
             if msg.is_multipart():
                 for part in msg.walk():
