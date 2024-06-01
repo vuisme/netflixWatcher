@@ -51,6 +51,17 @@ def extract_codes(text):
     return None
 
 
+def mask_email(email_address):
+    """Masks the email address to show only the first 2 and last 5 characters"""
+    username, domain = email_address.split('@')
+    if len(username) > 7:
+        masked_username = username[:2] + '****' + username[-1:]
+    else:
+        masked_username = username[:2] + '****'
+    masked_email = masked_username + '@' + domain
+    return masked_email
+
+
 def open_link_with_selenium(body, recipient_email):
     """Opens Selenium and clicks a button to confirm connection"""
     links = extract_links(body)
@@ -74,7 +85,8 @@ def open_link_with_selenium(body, recipient_email):
                 )
 
                 element.click()
-                message = f'Đã xác thực thành công cho {recipient_email} bằng Selenium'
+                masked_email = mask_email(recipient_email)
+                message = f'Đã tự động cập nhật Hộ Gia Đình thành công cho {masked_email}'
                 print(message)
                 send_telegram_message(message)
             except TimeoutException as exception:
@@ -111,14 +123,16 @@ def fetch_last_unseen_email():
                         body = part.get_payload(decode=True).decode()
                         otpcode = extract_codes(body)
                         if otpcode:
-                            message = f'Mã OTP cho {recipient_email} là: {otpcode}'
+                            masked_email = mask_email(recipient_email)
+                            message = f'Mã OTP cho {masked_email} là: {otpcode}'
                             print(message)
                             send_telegram_message(message)
             else:
                 body = msg.get_payload(decode=True).decode()
                 otpcode = extract_codes(body)
                 if otpcode:
-                    message = f'Mã OTP cho {recipient_email} là: {otpcode}'
+                    masked_email = mask_email(recipient_email)
+                    message = f'Mã OTP cho {masked_email} là: {otpcode}'
                     print(message)
                     send_telegram_message(message)
         else:
