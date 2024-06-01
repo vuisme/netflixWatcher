@@ -4,6 +4,7 @@ import email
 import re
 import time
 import os
+import requests
 from selenium import webdriver
 from selenium.webdriver import Keys
 from selenium.webdriver.common.by import By
@@ -15,6 +16,22 @@ EMAIL_IMAP = os.environ['EMAIL_IMAP']
 EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
 NETFLIX_EMAIL_SENDER = os.environ['NETFLIX_EMAIL_SENDER']
+TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
+TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
+
+
+def send_telegram_message(message):
+    """Sends a message to the Telegram group"""
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {
+        'chat_id': TELEGRAM_CHAT_ID,
+        'text': message
+    }
+    response = requests.post(url, json=payload)
+    if response.status_code == 200:
+        print("Gửi tin nhắn Telegram thành công")
+    else:
+        print("Gửi tin nhắn Telegram thất bại")
 
 
 def extract_links(text):
@@ -34,7 +51,7 @@ def extract_codes(text):
     return None
 
 
-def open_link_with_selenium(body):
+def open_link_with_selenium(body, recipient_email):
     """Opens Selenium and clicks a button to confirm connection"""
     links = extract_links(body)
     for link in links:
@@ -57,7 +74,9 @@ def open_link_with_selenium(body):
                 )
 
                 element.click()
-                print('Đã xác thực thành công')
+                message = f'Đã xác thực thành công cho {recipient_email} bằng Selenium'
+                print(message)
+                send_telegram_message(message)
             except TimeoutException as exception:
                 print("Error:", exception)
 
@@ -78,9 +97,12 @@ def fetch_last_unseen_email():
         msg = email.message_from_bytes(msg_data[0][1])
         print('Phát hiện yêu cầu xác thực mới')
 
+        # Lấy địa chỉ email người nhận
+        recipient_email = email.utils.parseaddr(msg['To'])[1]
+
         # Kiểm tra tiêu đề của email
         subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
-        if 'sign-in code' in subject:
+        if 'Sign-in code' in subject:
             print('Email chứa tiêu đề "Sign-in code"')
             if msg.is_multipart():
                 for part in msg.walk():
@@ -89,12 +111,16 @@ def fetch_last_unseen_email():
                         body = part.get_payload(decode=True).decode()
                         otpcode = extract_codes(body)
                         if otpcode:
-                            print(f'Mã OTP là: {otpcode}')
+                            message = f'Mã OTP cho {recipient_email} là: {otpcode}'
+                            print(message)
+                            send_telegram_message(message)
             else:
                 body = msg.get_payload(decode=True).decode()
                 otpcode = extract_codes(body)
                 if otpcode:
-                    print(f'Mã OTP là: {otpcode}')
+                    message = f'Mã OTP cho {recipient_email} là: {otpcode}'
+                    print(message)
+                    send_telegram_message(message)
         else:
             print('Email không chứa tiêu đề "Sign-in code", trích xuất liên kết')
             if msg.is_multipart():
@@ -102,10 +128,10 @@ def fetch_last_unseen_email():
                     content_type = part.get_content_type()
                     if "text/plain" in content_type:
                         body = part.get_payload(decode=True).decode()
-                        open_link_with_selenium(body)
+                        open_link_with_selenium(body, recipient_email)
             else:
                 body = msg.get_payload(decode=True).decode()
-                open_link_with_selenium(body)
+                open_link_with_selenium(body, recipient_email)
 
     mail.logout()
 
