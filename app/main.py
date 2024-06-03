@@ -11,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import logging
 import gspread
+from oauth2client.service_account import ServiceAccountCredentials
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -25,9 +26,20 @@ TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 SPREADSHEET_URL = os.environ['SPREADSHEET_URL']
 
 def get_recipients_from_spreadsheet():
-    """Lấy danh sách email và ID nhóm Telegram từ Google Sheets"""
+    """Lấy danh sách email và ID nhóm Telegram từ Google Sheets công khai"""
     try:
-        gc = gspread.service_account()
+        gc = gspread.service_account_from_dict({
+            "type": "service_account",
+            "project_id": "dummy",
+            "private_key_id": "dummy",
+            "private_key": "dummy",
+            "client_email": "dummy@dummy.iam.gserviceaccount.com",
+            "client_id": "dummy",
+            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+            "token_uri": "https://oauth2.googleapis.com/token",
+            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+            "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/dummy%40dummy.iam.gserviceaccount.com"
+        })
         spreadsheet = gc.open_by_url(SPREADSHEET_URL)
         worksheet = spreadsheet.sheet1
         recipients = worksheet.get_all_records()
