@@ -157,7 +157,7 @@ def process_email_body(body, recipient_email, chat_id):
             elif "temporary-access-code" in link:
                 handle_temporary_access_code(link, recipient_email, chat_id)
 
-def fetch_last_unseen_email(recipients):
+def fetch_last_unseen_email():
     """Lấy nội dung của email chưa đọc cuối cùng từ hộp thư đến"""
     mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
     try:
