@@ -23,7 +23,7 @@ EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
 NETFLIX_EMAIL_SENDER = os.environ['NETFLIX_EMAIL_SENDER']
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
-SPREADSHEET_URL = os.environ['SPREADSHEET_URL']
+SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1i6eDSVyuk46Orri-5PJyCn42YV3wSdFMtisort6oSKY/edit#gid=0"
 
 def get_recipients_from_spreadsheet():
     """Lấy danh sách email và ID nhóm Telegram từ Google Sheets công khai"""
@@ -41,8 +41,11 @@ def get_recipients_from_spreadsheet():
             "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/dummy%40dummy.iam.gserviceaccount.com"
         })
         spreadsheet = gc.open_by_url(SPREADSHEET_URL)
+        logger.info(spreadsheet)
         worksheet = spreadsheet.sheet1
+        logger.info(worksheet)
         recipients = worksheet.get_all_records()
+        logger.info(recipients)
         return recipients
     except Exception as e:
         logger.error("Lỗi khi lấy dữ liệu từ Google Sheets: %s", e)
@@ -150,13 +153,8 @@ def process_email_body(body, recipient_email, chat_id):
             elif "temporary-access-code" in link:
                 handle_temporary_access_code(link, recipient_email, chat_id)
 
-def fetch_last_unseen_email():
+def fetch_last_unseen_email(recipients):
     """Lấy nội dung của email chưa đọc cuối cùng từ hộp thư đến"""
-    recipients = get_recipients_from_spreadsheet()
-    if not recipients:
-        logger.error("Không có danh sách người nhận từ Google Sheets")
-        return
-    
     mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
     try:
         mail.login(EMAIL_LOGIN, EMAIL_PASSWORD)
@@ -170,26 +168,28 @@ def fetch_last_unseen_email():
             logger.info('Phát hiện yêu cầu xác thực mới')
 
             recipient_email = email.utils.parseaddr(msg['To'])[1]
-            chat_id = next((item['telegram_id'] for item in recipients if item['email'] == recipient_email), None)
-            if not chat_id:
-                logger.error(f"Không tìm thấy chat ID cho email {recipient_email}")
-                return
-            
             subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
             if 'sign-in code' in subject:
                 logger.info('Email chứa tiêu đề "sign-in code"')
             elif 'temporary access code' in subject:
                 logger.info('Email chứa tiêu đề "temporary access code"')
 
-            if msg.is_multipart():
-                for part in msg.walk():
-                    content_type = part.get_content_type()
-                    if "text/plain" in content_type:
-                        body = part.get_payload(decode=True).decode()
-                        process_email_body(body, recipient_email, chat_id)
-            else:
-                body = msg.get_payload(decode=True).decode()
-                process_email_body(body, recipient_email, chat_id)
+            chat_id = None
+            for recipient in recipients:
+                if recipient['email'] == recipient_email:
+                    chat_id = recipient['telegram_id']
+                    break
+
+            if chat_id:
+                if msg.is_multipart():
+                    for part in msg.walk():
+                        content_type = part.get_content_type()
+                        if "text/plain" in content_type:
+                            body = part.get_payload(decode=True).decode()
+                            process_email_body(body, recipient_email, chat_id)
+                else:
+                    body = msg.get_payload(decode=True).decode()
+                    process_email_body(body, recipient_email, chat_id)
     except Exception as e:
         logger.error("Lỗi khi xử lý email: %s", e)
     finally:
@@ -197,6 +197,7 @@ def fetch_last_unseen_email():
 
 if __name__ == "__main__":
     logger.info('KHỞI TẠO THÀNH CÔNG')
+    recipients = get_recipients_from_spreadsheet()
     while True:
-        fetch_last_unseen_email()
+        fetch_last_unseen_email(recipients)
         time.sleep(20)
