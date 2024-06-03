@@ -3,3 +3,4 @@ pylint
 requests
 gspread
 gspread_dataframe
+oauth2client
