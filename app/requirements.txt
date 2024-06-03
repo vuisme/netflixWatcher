@@ -2,3 +2,4 @@ selenium
 pylint
 requests
 gspread
+gspread_dataframe
