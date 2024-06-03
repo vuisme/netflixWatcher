@@ -23,7 +23,7 @@ jobs:
       run: docker push cpanel10x/netflix-watcher:latest
 
     - name: Update deployment
-      uses: appleboy/kubernetes-action
+      uses: appleboy/kubernetes-action@v0.0.1
       with:
         server: ${{ secrets.K8S_SERVER }}
         ca_cert: ${{ secrets.K8S_CA_CERT }}
