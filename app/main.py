@@ -23,7 +23,7 @@ EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
 NETFLIX_EMAIL_SENDER = os.environ['NETFLIX_EMAIL_SENDER']
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 SPREADSHEET_ID = os.environ['SPREADSHEET_ID']
-RANGE_NAME = "Sheet1!A:B"
+RANGE_NAME = os.environ['RANGE_NAME']
 API_KEY = os.environ['GOOGLE_SHEETS_API_KEY']
 
 def get_recipients_from_spreadsheet():
