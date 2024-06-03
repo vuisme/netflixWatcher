@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netflix-watcher
+  namespace: ittools
+  labels:
+    app: netflix-watcher
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netflix-watcher
+  template:
+    metadata:
+      labels:
+        app: netflix-watcher
+    spec:
+      containers:
+        - name: netflix-watcher
+          image: cpanel10x/netflix-watcher:latest
+          envFrom:
+            - configMapRef:
+                name: netflix-watcher-config
+          imagePullPolicy: Always
