@@ -170,14 +170,13 @@ def fetch_last_unseen_email(recipients):
             _, msg_data = mail.fetch(email_id, "(RFC822)")
             msg = email.message_from_bytes(msg_data[0][1])
             logger.info('Phát hiện yêu cầu xác thực mới')
-
             recipient_email = email.utils.parseaddr(msg['To'])[1]
             subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
             if 'sign-in code' in subject:
                 logger.info('Email chứa tiêu đề "sign-in code"')
             elif 'temporary access code' in subject:
                 logger.info('Email chứa tiêu đề "temporary access code"')
-
+            recipients = get_recipients_from_spreadsheet()
             chat_id = None
             for recipient in recipients:
                 if recipient['email'] == recipient_email:
@@ -201,7 +200,6 @@ def fetch_last_unseen_email(recipients):
 
 if __name__ == "__main__":
     logger.info('KHỞI TẠO THÀNH CÔNG')
-    recipients = get_recipients_from_spreadsheet()
     while True:
-        fetch_last_unseen_email(recipients)
+        fetch_last_unseen_email()
         time.sleep(20)
