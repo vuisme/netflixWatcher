@@ -10,6 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import logging
+import gspread
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -21,13 +22,25 @@ EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
 NETFLIX_EMAIL_SENDER = os.environ['NETFLIX_EMAIL_SENDER']
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
-TELEGRAM_CHAT_ID = os.environ['TELEGRAM_CHAT_ID']
+SPREADSHEET_URL = os.environ['SPREADSHEET_URL']
 
-def send_telegram_message(message):
+def get_recipients_from_spreadsheet():
+    """Lấy danh sách email và ID nhóm Telegram từ Google Sheets"""
+    try:
+        gc = gspread.service_account()
+        spreadsheet = gc.open_by_url(SPREADSHEET_URL)
+        worksheet = spreadsheet.sheet1
+        recipients = worksheet.get_all_records()
+        return recipients
+    except Exception as e:
+        logger.error("Lỗi khi lấy dữ liệu từ Google Sheets: %s", e)
+        return []
+
+def send_telegram_message(chat_id, message):
     """Gửi tin nhắn đến nhóm Telegram"""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
-        'chat_id': TELEGRAM_CHAT_ID,
+        'chat_id': chat_id,
         'text': message
     }
     try:
@@ -61,7 +74,7 @@ def mask_email(email_address):
     masked_email = masked_username + '@' + domain
     return masked_email
 
-def open_link_with_selenium(link, recipient_email):
+def open_link_with_selenium(link, recipient_email, chat_id):
     """Mở Selenium và nhấp nút để xác nhận kết nối"""
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
@@ -78,13 +91,13 @@ def open_link_with_selenium(link, recipient_email):
         masked_email = mask_email(recipient_email)
         message = f'Đã tự động cập nhật Hộ Gia Đình thành công cho {masked_email}'
         logger.info(message)
-        send_telegram_message(message)
+        send_telegram_message(chat_id, message)
     except TimeoutException as e:
         logger.error("Lỗi: %s", e)
     finally:
         driver.quit()
 
-def handle_temporary_access_code(link, recipient_email):
+def handle_temporary_access_code(link, recipient_email, chat_id):
     """Mở Selenium và lấy mã OTP từ liên kết"""
     options = webdriver.ChromeOptions()
     options.add_argument("--headless")
@@ -102,13 +115,13 @@ def handle_temporary_access_code(link, recipient_email):
         masked_email = mask_email(recipient_email)
         message = f'Mã OTP tạm thời cho {masked_email} là: {otp_code}'
         logger.info(message)
-        send_telegram_message(message)
+        send_telegram_message(chat_id, message)
     except TimeoutException as e:
         logger.error("Lỗi: %s", e)
     finally:
         driver.quit()
 
-def process_email_body(body, recipient_email):
+def process_email_body(body, recipient_email, chat_id):
     """Xử lý nội dung email"""
     if 'Enter this code to sign in' in body:
         otpcode = extract_codes(body)
@@ -116,17 +129,22 @@ def process_email_body(body, recipient_email):
             masked_email = mask_email(recipient_email)
             message = f'Mã OTP cho {masked_email} là: {otpcode}'
             logger.info(message)
-            send_telegram_message(message)
+            send_telegram_message(chat_id, message)
     else:
         links = extract_links(body)
         for link in links:
             if "update-primary-location" in link:
-                open_link_with_selenium(link, recipient_email)
+                open_link_with_selenium(link, recipient_email, chat_id)
             elif "temporary-access-code" in link:
-                handle_temporary_access_code(link, recipient_email)
+                handle_temporary_access_code(link, recipient_email, chat_id)
 
 def fetch_last_unseen_email():
     """Lấy nội dung của email chưa đọc cuối cùng từ hộp thư đến"""
+    recipients = get_recipients_from_spreadsheet()
+    if not recipients:
+        logger.error("Không có danh sách người nhận từ Google Sheets")
+        return
+    
     mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
     try:
         mail.login(EMAIL_LOGIN, EMAIL_PASSWORD)
@@ -140,6 +158,11 @@ def fetch_last_unseen_email():
             logger.info('Phát hiện yêu cầu xác thực mới')
 
             recipient_email = email.utils.parseaddr(msg['To'])[1]
+            chat_id = next((item['telegram_id'] for item in recipients if item['email'] == recipient_email), None)
+            if not chat_id:
+                logger.error(f"Không tìm thấy chat ID cho email {recipient_email}")
+                return
+            
             subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
             if 'sign-in code' in subject:
                 logger.info('Email chứa tiêu đề "sign-in code"')
@@ -151,10 +174,10 @@ def fetch_last_unseen_email():
                     content_type = part.get_content_type()
                     if "text/plain" in content_type:
                         body = part.get_payload(decode=True).decode()
-                        process_email_body(body, recipient_email)
+                        process_email_body(body, recipient_email, chat_id)
             else:
                 body = msg.get_payload(decode=True).decode()
-                process_email_body(body, recipient_email)
+                process_email_body(body, recipient_email, chat_id)
     except Exception as e:
         logger.error("Lỗi khi xử lý email: %s", e)
     finally:
