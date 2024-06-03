@@ -10,8 +10,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import logging
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from googleapiclient.discovery import build
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -23,29 +22,25 @@ EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
 NETFLIX_EMAIL_SENDER = os.environ['NETFLIX_EMAIL_SENDER']
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
-SPREADSHEET_URL = "https://docs.google.com/spreadsheets/d/1i6eDSVyuk46Orri-5PJyCn42YV3wSdFMtisort6oSKY/edit#gid=0"
+SPREADSHEET_ID = ""
+RANGE_NAME = "Sheet1!A:B"
+API_KEY = os.environ['GOOGLE_SHEETS_API_KEY']
 
 def get_recipients_from_spreadsheet():
     """Lấy danh sách email và ID nhóm Telegram từ Google Sheets công khai"""
     try:
-        gc = gspread.service_account_from_dict({
-            "type": "service_account",
-            "project_id": "dummy",
-            "private_key_id": "dummy",
-            "private_key": "dummy",
-            "client_email": "dummy@dummy.iam.gserviceaccount.com",
-            "client_id": "dummy",
-            "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-            "token_uri": "https://oauth2.googleapis.com/token",
-            "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-            "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/dummy%40dummy.iam.gserviceaccount.com"
-        })
-        spreadsheet = gc.open_by_url(SPREADSHEET_URL)
-        logger.info(spreadsheet)
-        worksheet = spreadsheet.sheet1
-        logger.info(worksheet)
-        recipients = worksheet.get_all_records()
-        logger.info(recipients)
+        service = build('sheets', 'v4', developerKey=API_KEY)
+        sheet = service.spreadsheets()
+        result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
+        values = result.get('values', [])
+
+        recipients = []
+        if not values:
+            logger.warning("No data found in the spreadsheet.")
+        else:
+            for row in values:
+                if len(row) >= 2:
+                    recipients.append({'email': row[0], 'telegram_id': row[1]})
         return recipients
     except Exception as e:
         logger.error("Lỗi khi lấy dữ liệu từ Google Sheets: %s", e)
