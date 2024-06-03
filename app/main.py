@@ -11,6 +11,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException
 import logging
 from googleapiclient.discovery import build
+from googleapiclient.discovery_cache.base import Cache
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -26,10 +27,18 @@ SPREADSHEET_ID = os.environ['SPREADSHEET_ID']
 RANGE_NAME = os.environ['RANGE_NAME']
 API_KEY = os.environ['GOOGLE_SHEETS_API_KEY']
 
+class NoCache(Cache):
+    """Dummy cache class for disabling the cache."""
+    def get(self, url):
+        return None
+
+    def set(self, url, content):
+        pass
+
 def get_recipients_from_spreadsheet():
     """Lấy danh sách email và ID nhóm Telegram từ Google Sheets công khai"""
     try:
-        service = build('sheets', 'v4', developerKey=API_KEY)
+        service = build('sheets', 'v4', developerKey=API_KEY, cache_discovery=False, cache=NoCache())
         sheet = service.spreadsheets()
         result = sheet.values().get(spreadsheetId=SPREADSHEET_ID, range=RANGE_NAME).execute()
         values = result.get('values', [])
