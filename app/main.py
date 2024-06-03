@@ -161,6 +161,7 @@ def fetch_last_unseen_email():
         mail.logout()
 
 if __name__ == "__main__":
+    logger.info('KHỞI TẠO THÀNH CÔNG')
     while True:
         fetch_last_unseen_email()
         time.sleep(20)
