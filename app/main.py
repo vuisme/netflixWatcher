@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 EMAIL_IMAP = os.environ['EMAIL_IMAP']
 EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
-NETFLIX_EMAIL_SENDER = os.environ['NETFLIX_EMAIL_SENDER']
+NETFLIX_EMAIL_SENDERS = os.environ['NETFLIX_EMAIL_SENDERS'].split(',')
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 SPREADSHEET_ID = os.environ['SPREADSHEET_ID']
 RANGE_NAME = os.environ['RANGE_NAME']
@@ -166,36 +166,38 @@ def fetch_last_unseen_email():
     try:
         mail.login(EMAIL_LOGIN, EMAIL_PASSWORD)
         mail.select("inbox")
-        _, email_ids = mail.search(None, '(UNSEEN FROM ' + NETFLIX_EMAIL_SENDER + ')')
-        email_ids = email_ids[0].split()
-        if email_ids:
-            email_id = email_ids[-1]
-            _, msg_data = mail.fetch(email_id, "(RFC822)")
-            msg = email.message_from_bytes(msg_data[0][1])
-            logger.info('Phát hiện yêu cầu xác thực mới')
-            recipient_email = email.utils.parseaddr(msg['To'])[1]
-            subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
-            if 'sign-in code' in subject:
-                logger.info('Email chứa tiêu đề "sign-in code"')
-            elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
-                logger.info('Email chứa tiêu đề "temporary access code"')
-            recipients = get_recipients_from_spreadsheet()
-            chat_id = None
-            for recipient in recipients:
-                if recipient['email'] == recipient_email:
-                    chat_id = recipient['telegram_id']
-                    break
+        
+        for sender in NETFLIX_EMAIL_SENDERS:
+            _, email_ids = mail.search(None, f'(UNSEEN FROM "{sender}")')
+            email_ids = email_ids[0].split()
+            if email_ids:
+                email_id = email_ids[-1]
+                _, msg_data = mail.fetch(email_id, "(RFC822)")
+                msg = email.message_from_bytes(msg_data[0][1])
+                logger.info('Phát hiện yêu cầu xác thực mới')
+                recipient_email = email.utils.parseaddr(msg['To'])[1]
+                subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
+                if 'sign-in code' in subject:
+                    logger.info('Email chứa tiêu đề "sign-in code"')
+                elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
+                    logger.info('Email chứa tiêu đề "temporary access code"')
+                recipients = get_recipients_from_spreadsheet()
+                chat_id = None
+                for recipient in recipients:
+                    if recipient['email'] == recipient_email:
+                        chat_id = recipient['telegram_id']
+                        break
 
-            if chat_id:
-                if msg.is_multipart():
-                    for part in msg.walk():
-                        content_type = part.get_content_type()
-                        if "text/plain" in content_type:
-                            body = part.get_payload(decode=True).decode()
-                            process_email_body(body, recipient_email, chat_id)
-                else:
-                    body = msg.get_payload(decode=True).decode()
-                    process_email_body(body, recipient_email, chat_id)
+                if chat_id:
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            content_type = part.get_content_type()
+                            if "text/plain" in content_type:
+                                body = part.get_payload(decode=True).decode()
+                                process_email_body(body, recipient_email, chat_id)
+                    else:
+                        body = msg.get_payload(decode=True).decode()
+                        process_email_body(body, recipient_email, chat_id)
     except Exception as e:
         logger.error("Lỗi khi xử lý email: %s", e)
     finally:
