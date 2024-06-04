@@ -81,6 +81,9 @@ def extract_codes(text):
     codes = re.search(r'(?<=Enter this code to sign in )\d{4}', text)
     if codes:
         return codes.group()
+    codes = re.search(r'(?<=Mã đăng nhập )\d{4}', text)
+    if codes:
+        return codes.group()
     return None
 
 def mask_email(email_address):
@@ -142,7 +145,7 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
 
 def process_email_body(body, recipient_email, chat_id):
     """Xử lý nội dung email"""
-    if 'Enter this code to sign in' in body:
+    if 'Enter this code to sign in' in body or 'Mã đăng nhập' in body:
         otpcode = extract_codes(body)
         if otpcode:
             masked_email = mask_email(recipient_email)
@@ -154,7 +157,7 @@ def process_email_body(body, recipient_email, chat_id):
         for link in links:
             if "update-primary-location" in link:
                 open_link_with_selenium(link, recipient_email, chat_id)
-            elif "temporary-access-code" in link:
+            elif "temporary-access-code" in link or "account/travel/verify" in link:
                 handle_temporary_access_code(link, recipient_email, chat_id)
 
 def fetch_last_unseen_email():
@@ -174,7 +177,7 @@ def fetch_last_unseen_email():
             subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
             if 'sign-in code' in subject:
                 logger.info('Email chứa tiêu đề "sign-in code"')
-            elif 'temporary access code' in subject:
+            elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
                 logger.info('Email chứa tiêu đề "temporary access code"')
             recipients = get_recipients_from_spreadsheet()
             chat_id = None
