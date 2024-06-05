@@ -131,7 +131,7 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
     try:
         driver.get(link)
         otp_element = WebDriverWait(driver, 10).until(
-            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-uia="otp-code-element"]'))
+            EC.presence_of_element_located((By.CSS_SELECTOR, '[data-uia="travel-verification-otp"]'))
         )
         otp_code = otp_element.text
         masked_email = mask_email(recipient_email)
