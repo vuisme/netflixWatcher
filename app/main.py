@@ -55,19 +55,26 @@ def get_recipients_from_spreadsheet():
         logger.error("Lỗi khi lấy dữ liệu từ Google Sheets: %s", e)
         return []
 
-def send_telegram_message(chat_id, message):
-    """Gửi tin nhắn đến nhóm Telegram"""
+def send_telegram_message(chat_id, message, retry_delay=30, max_attempts=5):
+    """Gửi tin nhắn đến nhóm Telegram với khả năng thử lại sau khi gửi thất bại"""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         'chat_id': chat_id,
         'text': message
     }
-    try:
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        logger.info("Gửi tin nhắn Telegram thành công")
-    except requests.exceptions.RequestException as e:
-        logger.error("Gửi tin nhắn Telegram thất bại: %s", e)
+    attempt = 0
+    while attempt < max_attempts:
+        try:
+            response = requests.post(url, json=payload)
+            response.raise_for_status()
+            logger.info("Gửi tin nhắn Telegram thành công")
+            return  # Thoát khỏi vòng lặp nếu gửi tin nhắn thành công
+        except requests.exceptions.RequestException as e:
+            logger.error("Gửi tin nhắn Telegram thất bại: %s", e)
+            logger.info(f"Thử lại sau {retry_delay} giây...")
+            time.sleep(retry_delay)
+            attempt += 1
+    logger.error(f"Đã thử {max_attempts} lần, không thể gửi tin nhắn.")
 
 def extract_links(text):
     """Tìm tất cả các liên kết https"""
