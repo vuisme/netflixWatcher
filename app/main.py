@@ -138,8 +138,18 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
         message = f'Mã OTP tạm thời cho {masked_email} là: {otp_code}'
         logger.info(message)
         send_telegram_message(chat_id, message)
-    except TimeoutException as e:
-        logger.error("Lỗi: %s", e)
+    except TimeoutException:
+        logger.error("Không thể tìm thấy mã OTP trong thời gian quy định.")
+    except NoSuchElementException:
+        # Kiểm tra xem dòng chữ "Liên kết này không còn hiệu lực" có xuất hiện không
+        invalid_link_text = "Liên kết này không còn hiệu lực"
+        if invalid_link_text in driver.page_source:
+            logger.error("Liên kết này không còn hiệu lực.")
+            send_telegram_message(chat_id, "Liên kết này không còn hiệu lực.")
+        else:
+            logger.error("Không tìm thấy dòng chữ xác định trên trang web.")
+    except WebDriverException as e:
+        logger.error("Lỗi WebDriver: %s", e)
     finally:
         driver.quit()
 
