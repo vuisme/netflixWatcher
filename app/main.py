@@ -8,7 +8,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, WebDriverException
+from selenium.common.exceptions import TimeoutException, WebDriverException
 import logging
 from googleapiclient.discovery import build
 from googleapiclient.discovery_cache.base import Cache
@@ -26,6 +26,7 @@ TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 SPREADSHEET_ID = os.environ['SPREADSHEET_ID']
 RANGE_NAME = os.environ['RANGE_NAME']
 API_KEY = os.environ['GOOGLE_SHEETS_API_KEY']
+TELEGRAM_ADMIN_UID = os.environ['TELEGRAM_ADMIN_UID']
 
 class NoCache(Cache):
     """Dummy cache class for disabling the cache."""
@@ -45,14 +46,18 @@ def get_recipients_from_spreadsheet():
 
         recipients = []
         if not values:
-            logger.warning("No data found in the spreadsheet.")
+            message = "No data found in the spreadsheet."
+            logger.warning(message)
+            send_telegram_message(TELEGRAM_ADMIN_UID, message)
         else:
             for row in values:
                 if len(row) >= 2:
                     recipients.append({'email': row[0], 'telegram_id': row[1]})
         return recipients
     except Exception as e:
-        logger.error("Lỗi khi lấy dữ liệu từ Google Sheets: %s", e)
+        message = f"Lỗi khi lấy dữ liệu từ Google Sheets: {e}"
+        logger.error(message)
+        send_telegram_message(TELEGRAM_ADMIN_UID, message)
         return []
 
 def send_telegram_message(chat_id, message, retry_delay=30, max_attempts=5):
@@ -122,7 +127,9 @@ def open_link_with_selenium(link, recipient_email, chat_id):
         logger.info(message)
         send_telegram_message(chat_id, message)
     except TimeoutException as e:
-        logger.error("Lỗi: %s", e)
+        message = f"Lỗi: {e}"
+        logger.error(message)
+        send_telegram_message(TELEGRAM_ADMIN_UID, message)
     finally:
         driver.quit()
 
@@ -145,16 +152,14 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
         message = f'Mã OTP tạm thời cho {masked_email} là: {otp_code}'
         logger.info(message)
         send_telegram_message(chat_id, message)
-    except NoSuchElementException:
-        # Kiểm tra xem dòng chữ "Liên kết này không còn hiệu lực" có xuất hiện không
-        invalid_link_text = "Liên kết này không còn hiệu lực"
-        if invalid_link_text in driver.page_source:
-            logger.error("Liên kết này không còn hiệu lực.")
-            send_telegram_message(chat_id, "Liên kết này không còn hiệu lực.")
-        else:
-            logger.error("Không tìm thấy dòng chữ xác định trên trang web.")
+    except TimeoutException:
+        message = "Không thể tìm thấy mã OTP trong thời gian quy định."
+        logger.error(message)
+        send_telegram_message(TELEGRAM_ADMIN_UID, message)
     except WebDriverException as e:
-        logger.error("Lỗi WebDriver: %s", e)
+        message = f"Lỗi WebDriver: {e}"
+        logger.error(message)
+        send_telegram_message(TELEGRAM_ADMIN_UID, message)
     finally:
         driver.quit()
 
@@ -190,36 +195,28 @@ def fetch_last_unseen_email():
                 _, msg_data = mail.fetch(email_id, "(RFC822)")
                 msg = email.message_from_bytes(msg_data[0][1])
                 logger.info('Phát hiện yêu cầu xác thực mới')
+                send_telegram_message(TELEGRAM_ADMIN_UID, 'Phát hiện yêu cầu xác thực mới')
                 recipient_email = email.utils.parseaddr(msg['To'])[1]
                 subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
                 if 'sign-in code' in subject:
                     logger.info('Email chứa tiêu đề "sign-in code"')
+                    send_telegram_message(TELEGRAM_ADMIN_UID, 'Email chứa tiêu đề "sign-in code"')
                 elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
                     logger.info('Email chứa tiêu đề "temporary access code"')
-                recipients = get_recipients_from_spreadsheet()
-                chat_id = None
-                for recipient in recipients:
-                    if recipient['email'] == recipient_email:
-                        chat_id = recipient['telegram_id']
-                        break
-
-                if chat_id:
-                    if msg.is_multipart():
-                        for part in msg.walk():
-                            content_type = part.get_content_type()
-                            if "text/plain" in content_type:
-                                body = part.get_payload(decode=True).decode()
-                                process_email_body(body, recipient_email, chat_id)
-                    else:
-                        body = msg.get_payload(decode=True).decode()
-                        process_email_body(body, recipient_email, chat_id)
-    except Exception as e:
-        logger.error("Lỗi khi xử lý email: %s", e)
+                    send_telegram_message(TELEGRAM_ADMIN_UID, 'Email chứa tiêu đề "temporary access code"')
+                for part in msg.walk():
+                    if part.get_content_type() == "text/plain":
+                        body = part.get_payload(decode=True).decode(part.get_content_charset())
+                        process_email_body(body, recipient_email, TELEGRAM_ADMIN_UID)
+    except imaplib.IMAP4.error as e:
+        message = f"Lỗi khi truy cập hộp thư: {e}"
+        logger.error(message)
+        send_telegram_message(TELEGRAM_ADMIN_UID, message)
     finally:
         mail.logout()
 
 if __name__ == "__main__":
-    logger.info('KHỞI TẠO THÀNH CÔNG')
+    recipients = get_recipients_from_spreadsheet()
     while True:
         fetch_last_unseen_email()
-        time.sleep(20)
+        time.sleep(30)
