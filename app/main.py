@@ -76,6 +76,9 @@ def send_telegram_message(chat_id, message, retry_delay=30, max_attempts=5):
             return  # Thoát khỏi vòng lặp nếu gửi tin nhắn thành công
         except requests.exceptions.RequestException as e:
             logger.error("Gửi tin nhắn Telegram thất bại: %s", e)
+            if attempt == max_attempts - 1:
+                # Gửi tin nhắn cho admin sau khi thử max_attempts lần
+                send_telegram_message(TELEGRAM_ADMIN_UID, f"Gửi tin nhắn Telegram thất bại sau {max_attempts} lần thử: {e}")
             logger.info(f"Thử lại sau {retry_delay} giây...")
             time.sleep(retry_delay)
             attempt += 1
@@ -152,10 +155,10 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
         message = f'Mã OTP tạm thời cho {masked_email} là: {otp_code}'
         logger.info(message)
         send_telegram_message(chat_id, message)
-    except TimeoutException:
-        message = "Không thể tìm thấy mã OTP trong thời gian quy định."
+    except TimeoutException as e:
+        message = f"Lỗi: {e}"
         logger.error(message)
-        send_telegram_message(TELEGRAM_ADMIN_UID, message)
+        send_telegram_message(TELEGRAM_ADMIN_UID, message) 
     except WebDriverException as e:
         message = f"Lỗi WebDriver: {e}"
         logger.error(message)
@@ -201,19 +204,32 @@ def fetch_last_unseen_email():
                     logger.info('Email chứa tiêu đề "sign-in code"')
                 elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
                     logger.info('Email chứa tiêu đề "temporary access code"')
-                for part in msg.walk():
-                    if part.get_content_type() == "text/plain":
-                        body = part.get_payload(decode=True).decode(part.get_content_charset())
-                        process_email_body(body, recipient_email, TELEGRAM_ADMIN_UID)
-    except imaplib.IMAP4.error as e:
-        message = f"Lỗi khi truy cập hộp thư: {e}"
+                recipients = get_recipients_from_spreadsheet()
+                chat_id = None
+                for recipient in recipients:
+                    if recipient['email'] == recipient_email:
+                        chat_id = recipient['telegram_id']
+                        break
+
+                if chat_id:
+                    if msg.is_multipart():
+                        for part in msg.walk():
+                            content_type = part.get_content_type()
+                            if "text/plain" in content_type:
+                                body = part.get_payload(decode=True).decode()
+                                process_email_body(body, recipient_email, chat_id)
+                    else:
+                        body = msg.get_payload(decode=True).decode()
+                        process_email_body(body, recipient_email, chat_id)
+    except Exception as e:
+        message = f"Lỗi khi xử lý email: {e}"
         logger.error(message)
         send_telegram_message(TELEGRAM_ADMIN_UID, message)
     finally:
         mail.logout()
 
 if __name__ == "__main__":
-    recipients = get_recipients_from_spreadsheet()
+    logger.info('KHỞI TẠO THÀNH CÔNG')
     while True:
         fetch_last_unseen_email()
-        time.sleep(30)
+        time.sleep(20)
