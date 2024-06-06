@@ -195,15 +195,12 @@ def fetch_last_unseen_email():
                 _, msg_data = mail.fetch(email_id, "(RFC822)")
                 msg = email.message_from_bytes(msg_data[0][1])
                 logger.info('Phát hiện yêu cầu xác thực mới')
-                send_telegram_message(TELEGRAM_ADMIN_UID, 'Phát hiện yêu cầu xác thực mới')
                 recipient_email = email.utils.parseaddr(msg['To'])[1]
                 subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
                 if 'sign-in code' in subject:
                     logger.info('Email chứa tiêu đề "sign-in code"')
-                    send_telegram_message(TELEGRAM_ADMIN_UID, 'Email chứa tiêu đề "sign-in code"')
                 elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
                     logger.info('Email chứa tiêu đề "temporary access code"')
-                    send_telegram_message(TELEGRAM_ADMIN_UID, 'Email chứa tiêu đề "temporary access code"')
                 for part in msg.walk():
                     if part.get_content_type() == "text/plain":
                         body = part.get_payload(decode=True).decode(part.get_content_charset())
