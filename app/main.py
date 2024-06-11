@@ -169,6 +169,7 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
 def process_email_body(body, recipient_email, chat_id):
     """Xử lý nội dung email"""
     if 'Enter this code to sign in' in body or 'Mã đăng nhập' in body:
+        logger.info("Trích xuất mã đăng nhập")
         otpcode = extract_codes(body)
         if otpcode:
             masked_email = mask_email(recipient_email)
