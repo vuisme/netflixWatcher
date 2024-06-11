@@ -96,7 +96,7 @@ def extract_codes(text):
     codes = re.search(r'(?<=Enter this code to sign in )\d{4}', text)
     if codes:
         return codes.group()
-    codes = re.search(r'(?<=Mã đăng nhập )\d{4}', text)
+    codes = re.search(r'(?<=Nhập mã này để đăng nhập )\d{4}', text)
     if codes:
         return codes.group()
     return None
