@@ -218,7 +218,6 @@ def fetch_last_unseen_email():
                             content_type = part.get_content_type()
                             if "text/plain" in content_type:
                                 body = part.get_payload(decode=True).decode()
-                                logger.info(body)
                                 process_email_body(body, recipient_email, chat_id)
                     else:
                         body = msg.get_payload(decode=True).decode()
