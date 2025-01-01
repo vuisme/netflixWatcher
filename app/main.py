@@ -260,6 +260,7 @@ def fetch_last_unseen_email():
                                 process_email_body(body, recipient_email, chat_id)
                     else:
                         body = msg.get_payload(decode=True).decode()
+                        logger.info(body)
                         process_email_body(body, recipient_email, chat_id)
     except Exception as e:
         message = f"Lỗi khi xử lý email: {e}"
