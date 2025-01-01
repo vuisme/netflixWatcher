@@ -235,6 +235,7 @@ def fetch_last_unseen_email():
                 logger.info('Phát hiện yêu cầu xác thực mới')
                 recipient_email = email.utils.parseaddr(msg['To'])[1]
                 subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
+                logger.info(subject)
                 if 'sign-in code' in subject:
                     logger.info('Email chứa tiêu đề "sign-in code"')
                 elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
