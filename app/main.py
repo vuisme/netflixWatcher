@@ -166,6 +166,29 @@ def handle_temporary_access_code(link, recipient_email, chat_id):
     finally:
         driver.quit()
 
+
+def extract_transaction_details(body):
+    """Trích xuất chi tiết giao dịch từ nội dung email."""
+    transaction_details = {}
+
+    # Trích xuất số tiền tăng
+    amount_increased_match = re.search(r"vừa tăng ([\d,.]+) VND", body)
+    if amount_increased_match:
+        transaction_details["amount_increased"] = amount_increased_match.group(1)
+
+    # Trích xuất số dư hiện tại
+    current_balance_match = re.search(r"Số dư hiện tại: ([\d,.]+) VND", body)
+    if current_balance_match:
+        transaction_details["current_balance"] = current_balance_match.group(1)
+
+    # Trích xuất mô tả giao dịch
+    description_match = re.search(r"Mô tả: (.+)", body)
+    if description_match:
+        transaction_details["description"] = description_match.group(1)
+
+    return transaction_details
+
+
 def process_email_body(body, recipient_email, chat_id):
     """Xử lý nội dung email"""
     if 'Enter this code to sign in' in body or 'Nhập mã này để đăng nhập' in body:
@@ -176,6 +199,17 @@ def process_email_body(body, recipient_email, chat_id):
             message = f'Mã OTP cho {masked_email} là: {otpcode}'
             logger.info(message)
             send_telegram_message(chat_id, message)
+    elif 'Tài khoản Spend Account vừa tăng' in body:
+        logger.info("Trích xuất chi tiết giao dịch")
+        transaction_details = extract_transaction_details(body)
+        if transaction_details:
+            message = (
+                f"Số tiền tăng: {transaction_details.get('amount_increased', 'Không rõ')}\n"
+                f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
+                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}"
+            )
+            logger.info(message)
+            send_telegram_message(TELEGRAM_ADMIN_UID, message)
     else:
         links = extract_links(body)
         for link in links:
