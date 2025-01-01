@@ -23,7 +23,9 @@ jobs:
         file: ./Dockerfile
         platforms: linux/amd64,linux/arm64
         push: true
+        no-cache: true
         tags: cpanel10x/netflix-watcher:latest
+
       
     # - name: Update deployment
     #   uses: appleboy/kubernetes-action@v0.0.1
