@@ -239,6 +239,8 @@ def fetch_last_unseen_email():
                     logger.info('Email chứa tiêu đề "sign-in code"')
                 elif 'temporary access code' in subject or 'Mã truy cập Netflix tạm thời của bạn' in subject:
                     logger.info('Email chứa tiêu đề "temporary access code"')
+                elif 'Thông báo thay đổi số dư tài khoản' in subject:
+                    logger.info('Email báo số dư"')
                 recipients = get_recipients_from_spreadsheet()
                 chat_id = None
                 for recipient in recipients:
