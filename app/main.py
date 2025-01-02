@@ -176,7 +176,12 @@ def extract_transaction_details(body):
     amount_increased_match = re.search(r"vừa tăng ([\d,.]+) VND", body)
     if amount_increased_match:
         transaction_details["amount_increased"] = amount_increased_match.group(1)
-
+    
+    # Trích xuất số tiền giảm
+    amount_decreased_match = re.search(r"vừa giảm ([\d,.]+) VND", body)
+    if amount_decreased_match:
+        transaction_details["amount_decreased"] = amount_decreased_match.group(1)
+        
     # Trích xuất số dư hiện tại
     current_balance_match = re.search(r"Số dư hiện tại: ([\d,.]+) VND", body)
     if current_balance_match:
@@ -206,6 +211,17 @@ def process_email_body(body, recipient_email, chat_id):
         if transaction_details:
             message = (
                 f"Số tiền tăng: {transaction_details.get('amount_increased', 'Không rõ')}\n"
+                f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
+                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}"
+            )
+            logger.info(message)
+            send_telegram_message(TELEGRAM_ADMIN_UID, message)
+    elif 'Tài khoản Spend Account vừa giảm' in body:
+        logger.info("Trích xuất chi tiết giao dịch")
+        transaction_details = extract_transaction_details(body)
+        if transaction_details:
+            message = (
+                f"Số tiền giảm: {transaction_details.get('amount_decreased', 'Không rõ')}\n"
                 f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
                 f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}"
             )
