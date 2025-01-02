@@ -190,7 +190,7 @@ def extract_transaction_details(body):
     # Trích xuất mô tả giao dịch
     description_match = re.search(r"Mô tả: (.+)", body)
     if description_match:
-        transaction_details["description"] = description_match.group(1)
+        transaction_details["description"] = description_match.group(1).split("</p>")[0]
 
     return transaction_details
 
