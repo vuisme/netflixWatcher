@@ -253,7 +253,11 @@ def fetch_last_unseen_email():
                     if msg.is_multipart():
                         logger.info('is_multipart')
                         for part in msg.walk():
+                            logger.info('part')
+                            logger.info(part)
                             content_type = part.get_content_type()
+                            logger.info('content_type')
+                            logger.info(content_type)
                             if "text/plain" in content_type:
                                 body = part.get_payload(decode=True).decode()
                                 logger.info(body)
