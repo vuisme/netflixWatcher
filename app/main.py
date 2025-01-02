@@ -251,11 +251,11 @@ def fetch_last_unseen_email():
                 if chat_id:
                     logger.info(chat_id)
                     if msg.is_multipart():
+                        logger.info('is_multipart')
                         for part in msg.walk():
                             content_type = part.get_content_type()
                             if "text/plain" in content_type:
                                 body = part.get_payload(decode=True).decode()
-                                logger.info('is_multipart')
                                 logger.info(body)
                                 process_email_body(body, recipient_email, chat_id)
                     else:
