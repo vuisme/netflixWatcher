@@ -241,8 +241,6 @@ def fetch_last_unseen_email():
                     logger.info('Email chứa tiêu đề "temporary access code"')
                 elif 'số dư tài khoản' in subject:
                     logger.info('Email báo số dư')
-                    body = msg.get_payload(decode=True).decode()
-                    process_email_body(body, recipient_email, chat_id)
                 recipients = get_recipients_from_spreadsheet()
                 chat_id = None
                 for recipient in recipients:
