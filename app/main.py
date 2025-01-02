@@ -255,10 +255,14 @@ def fetch_last_unseen_email():
                             content_type = part.get_content_type()
                             if "text/plain" in content_type:
                                 body = part.get_payload(decode=True).decode()
+                                logger.info('is_multipart')
                                 logger.info(body)
                                 process_email_body(body, recipient_email, chat_id)
                     else:
                         body = msg.get_payload(decode=True).decode()
+                        logger.info('else msg')
+                        logger.info(msg)
+                        logger.info('body')
                         logger.info(body)
                         process_email_body(body, recipient_email, chat_id)
     except Exception as e:
