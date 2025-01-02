@@ -13,6 +13,7 @@ from selenium.common.exceptions import TimeoutException, WebDriverException
 import logging
 from googleapiclient.discovery import build
 from googleapiclient.discovery_cache.base import Cache
+from datetime import datetime
 
 # Cấu hình logging
 logging.basicConfig(level=logging.INFO)
@@ -181,7 +182,21 @@ def extract_transaction_details(body):
     amount_decreased_match = re.search(r"vừa giảm ([\d,.]+) VND", body)
     if amount_decreased_match:
         transaction_details["amount_decreased"] = amount_decreased_match.group(1)
-        
+    
+    # Lấy thời gian giao dịch
+    time_match = re.search(r"vào (\d{2}/\d{2}/\d{4} \d{2}:\d{2})", body)
+    if time_match:
+        transaction_details["time"] = time_match.group(1)
+
+        # Chuyển đổi sang định dạng ISO 8601
+        try:
+            datetime_object = datetime.strptime(transaction_details["time"], "%d/%m/%Y %H:%M") # Định dạng thời gian gốc
+            transaction_details["time"] = datetime_object.isoformat() + "+07:00"  # Thêm 'Z' cho UTC
+            # nếu thời gian có múi giờ khác thì thay Z bằng múi giờ tương ứng. Ví dụ:
+            # transaction_details["time"] = datetime_object.isoformat() + "+07:00"
+        except ValueError:
+            logger.info("Lỗi: Định dạng thời gian không hợp lệ.")
+ 
     # Trích xuất số dư hiện tại
     current_balance_match = re.search(r"Số dư hiện tại: ([\d,.]+) VND", body)
     if current_balance_match:
@@ -212,7 +227,8 @@ def process_email_body(body, recipient_email, chat_id):
             message = (
                 f"Số tiền tăng: {transaction_details.get('amount_increased', 'Không rõ')}\n"
                 f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
-                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}"
+                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}\n"
+                f"Thời gian giao dịch: {transaction_details.get('time', 'Không rõ')}"
             )
             logger.info(message)
             send_telegram_message(TELEGRAM_ADMIN_UID, message)
@@ -223,7 +239,8 @@ def process_email_body(body, recipient_email, chat_id):
             message = (
                 f"Số tiền giảm: {transaction_details.get('amount_decreased', 'Không rõ')}\n"
                 f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
-                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}"
+                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}\n"
+                f"Thời gian giao dịch: {transaction_details.get('time', 'Không rõ')}"
             )
             logger.info(message)
             send_telegram_message(TELEGRAM_ADMIN_UID, message)
