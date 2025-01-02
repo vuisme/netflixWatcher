@@ -233,8 +233,6 @@ def fetch_last_unseen_email():
                 _, msg_data = mail.fetch(email_id, "(RFC822)")
                 msg = email.message_from_bytes(msg_data[0][1])
                 logger.info('Phát hiện yêu cầu xác thực mới')
-                logger.info('msg')
-                logger.info(msg)
                 recipient_email = email.utils.parseaddr(msg['To'])[1]
                 subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
                 if 'sign-in code' in subject:
@@ -243,6 +241,7 @@ def fetch_last_unseen_email():
                     logger.info('Email chứa tiêu đề "temporary access code"')
                 elif 'số dư tài khoản' in subject:
                     logger.info('Email báo số dư')
+                    body = msg.get_payload(decode=True).decode()
                     process_email_body(body, recipient_email, chat_id)
                 recipients = get_recipients_from_spreadsheet()
                 chat_id = None
