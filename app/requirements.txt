@@ -2,3 +2,4 @@ selenium
 pylint
 requests
 google-api-python-client
+html2text
