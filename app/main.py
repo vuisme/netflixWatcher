@@ -4,6 +4,7 @@ import re
 import time
 import os
 import requests
+import html2text
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -253,12 +254,14 @@ def fetch_last_unseen_email():
                     if msg.is_multipart():
                         logger.info('is_multipart')
                         for part in msg.walk():
-                            logger.info('part')
-                            logger.info(part)
                             content_type = part.get_content_type()
                             logger.info('content_type')
                             logger.info(content_type)
                             if "text/plain" in content_type:
+                                body = part.get_payload(decode=True).decode()
+                                logger.info(body)
+                                process_email_body(body, recipient_email, chat_id)
+                            if "text/html" in content_type:
                                 body = part.get_payload(decode=True).decode()
                                 logger.info(body)
                                 process_email_body(body, recipient_email, chat_id)
