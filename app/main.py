@@ -324,7 +324,7 @@ def fetch_last_unseen_email():
         mail.logout()
 
 if __name__ == "__main__":
-    logger.info(f'KHỞI TẠO THÀNH CÔNG - ver 4.5')
+    logger.info(f'KHỞI TẠO THÀNH CÔNG - ver 2.0')
     logger.info(f'NETFLIX MODULE: {"BẬT" if ENABLE_NETFLIX_MODULE else "TẮT"}')
     logger.info(f'CAKE MODULE: {"BẬT" if ENABLE_CAKE_MODULE else "TẮT"}')
     while True:
