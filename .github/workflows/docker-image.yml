@@ -24,7 +24,7 @@ jobs:
         platforms: linux/amd64,linux/arm64
         push: true
         no-cache: true
-        tags: cpanel10x/netflix-watcher:1.0
+        tags: cpanel10x/netflix-watcher:2.0
 
       
     # - name: Update deployment
