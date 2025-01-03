@@ -198,3 +198,4 @@ MIT License
 ## Lời cảm ơn (Từ phiên bản cũ)
 
 This project was inspired by the need to simplify the Netflix Household update process.  It aims to save users time and effort by automating the email confirmation step. (Dự án này được lấy cảm hứng từ nhu cầu đơn giản hóa quy trình cập nhật Hộ gia đình Netflix. Nó nhằm mục đích tiết kiệm thời gian và công sức của người dùng bằng cách tự động hóa bước xác nhận email.)
+Base on: https://github.com/jakubfrasunek/netflixWatcher. Thanks @jakubfrasunek
