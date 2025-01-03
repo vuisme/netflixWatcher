@@ -86,7 +86,7 @@
     docker-compose up -d
     ```
 
-### Cách 2: Tự build từ source code (Phiên bản 4.5)
+### Cách 2: Tự build từ source code
 
 **Lưu ý:** Đây là phiên bản mới nhất, cho phép bạn tùy chỉnh và cập nhật mã nguồn.
 
