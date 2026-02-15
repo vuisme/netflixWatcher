@@ -16,33 +16,54 @@ from googleapiclient.discovery_cache.base import Cache
 from datetime import datetime
 
 # Cấu hình logging
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Tải biến môi trường
-EMAIL_IMAP = os.environ['EMAIL_IMAP']
+# --- Tải biến môi trường ---
+EMAIL_IMAP = os.environ.get('EMAIL_IMAP', 'imap.gmail.com')
 EMAIL_LOGIN = os.environ['EMAIL_LOGIN']
 EMAIL_PASSWORD = os.environ['EMAIL_PASSWORD']
-NETFLIX_EMAIL_SENDERS = os.environ.get('NETFLIX_EMAIL_SENDERS', '').split(',')
-CAKE_EMAIL_SENDERS = os.environ.get('CAKE_EMAIL_SENDERS', '').split(',')
+
+# Xử lý danh sách sender, lọc bỏ chuỗi rỗng
+NETFLIX_EMAIL_SENDERS = [s.strip() for s in os.environ.get('NETFLIX_EMAIL_SENDERS', '').split(',') if s.strip()]
+CAKE_EMAIL_SENDERS = [s.strip() for s in os.environ.get('CAKE_EMAIL_SENDERS', '').split(',') if s.strip()]
+
 TELEGRAM_TOKEN = os.environ['TELEGRAM_TOKEN']
 SPREADSHEET_ID = os.environ['SPREADSHEET_ID']
 RANGE_NAME = os.environ['RANGE_NAME']
 API_KEY = os.environ['GOOGLE_SHEETS_API_KEY']
 TELEGRAM_ADMIN_UID = os.environ['TELEGRAM_ADMIN_UID']
+
 ENABLE_NETFLIX_MODULE = os.environ.get('ENABLE_NETFLIX_MODULE', 'true').lower() == 'true'
 ENABLE_CAKE_MODULE = os.environ.get('ENABLE_CAKE_MODULE', 'true').lower() == 'true'
+
+# Cấu hình Selenium từ biến môi trường (Quan trọng cho K8s)
+SELENIUM_HOST = os.environ.get('SELENIUM_HOST', 'localhost')
+SELENIUM_PORT = os.environ.get('SELENIUM_PORT', '4444')
+SELENIUM_URL = f'http://{SELENIUM_HOST}:{SELENIUM_PORT}/wd/hub'
 
 class NoCache(Cache):
     """Dummy cache class for disabling the cache."""
     def get(self, url):
         return None
-
     def set(self, url, content):
         pass
 
+def get_selenium_driver():
+    """Khởi tạo Selenium Driver với cấu hình dynamic"""
+    options = webdriver.ChromeOptions()
+    options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    logger.info(f"Đang kết nối tới Selenium tại: {SELENIUM_URL}")
+    return webdriver.Remote(
+        command_executor=SELENIUM_URL,
+        options=options
+    )
+
 def get_recipients_from_spreadsheet():
-    """Lấy danh sách email và ID nhóm Telegram từ Google Sheets công khai"""
+    """Lấy danh sách email và ID nhóm Telegram từ Google Sheets"""
     try:
         service = build('sheets', 'v4', developerKey=API_KEY, cache_discovery=False, cache=NoCache())
         sheet = service.spreadsheets()
@@ -51,176 +72,126 @@ def get_recipients_from_spreadsheet():
 
         recipients = []
         if not values:
-            message = "No data found in the spreadsheet."
-            logger.warning(message)
-            send_telegram_message(TELEGRAM_ADMIN_UID, message)
+            logger.warning("No data found in the spreadsheet.")
         else:
             for row in values:
                 if len(row) >= 2:
-                    recipients.append({'email': row[0], 'telegram_id': row[1]})
+                    recipients.append({'email': row[0].strip(), 'telegram_id': row[1].strip()})
         return recipients
     except Exception as e:
-        message = f"Lỗi khi lấy dữ liệu từ Google Sheets: {e}"
-        logger.error(message)
-        send_telegram_message(TELEGRAM_ADMIN_UID, message)
+        logger.error(f"Lỗi khi lấy dữ liệu từ Google Sheets: {e}")
         return []
 
-def send_telegram_message(chat_id, message, retry_delay=30, max_attempts=5):
-    """Gửi tin nhắn đến nhóm Telegram với khả năng thử lại sau khi gửi thất bại"""
+def send_telegram_message(chat_id, message, retry_delay=10, max_attempts=3):
+    """Gửi tin nhắn Telegram"""
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        'chat_id': chat_id,
-        'text': message
-    }
-    attempt = 0
-    while attempt < max_attempts:
+    payload = {'chat_id': chat_id, 'text': message}
+    
+    for attempt in range(max_attempts):
         try:
-            response = requests.post(url, json=payload)
+            response = requests.post(url, json=payload, timeout=10)
             response.raise_for_status()
-            logger.info("Gửi tin nhắn Telegram thành công")
-            return  # Thoát khỏi vòng lặp nếu gửi tin nhắn thành công
-        except requests.exceptions.RequestException as e:
-            logger.error("Gửi tin nhắn Telegram thất bại: %s", e)
-            if attempt == max_attempts - 1:
-                # Gửi tin nhắn cho admin sau khi thử max_attempts lần
-                send_telegram_message(TELEGRAM_ADMIN_UID, f"Gửi tin nhắn Telegram thất bại sau {max_attempts} lần thử: {e}")
-            logger.info(f"Thử lại sau {retry_delay} giây...")
+            logger.info(f"Đã gửi Telegram tới {chat_id}")
+            return
+        except Exception as e:
+            logger.error(f"Gửi Telegram thất bại (Lần {attempt+1}): {e}")
             time.sleep(retry_delay)
-            attempt += 1
-    logger.error(f"Đã thử {max_attempts} lần, không thể gửi tin nhắn.")
+    
+    logger.error(f"Bỏ cuộc gửi tin nhắn tới {chat_id} sau {max_attempts} lần.")
 
 def extract_links(text):
-    """Tìm tất cả các liên kết https"""
-    url_pattern = r'https?://\S+'
-    urls = re.findall(url_pattern, text)
-    return urls
+    return re.findall(r'https?://\S+', text)
 
 def extract_codes(text):
-    """Tìm mã 4 chữ số sau 'Enter this code to sign in'"""
     text = re.sub(r'\s+', ' ', text)
-    codes = re.search(r'(?<=Enter this code to sign in )\d{4}', text)
-    if codes:
-        return codes.group()
-    codes = re.search(r'(?<=Nhập mã này để đăng nhập )\d{4}', text)
-    if codes:
-        return codes.group()
-    return None
+    # Pattern tìm mã 4 số
+    match = re.search(r'(?:Enter this code to sign in|Nhập mã này để đăng nhập)\s*(\d{4})', text)
+    return match.group(1) if match else None
 
 def mask_email(email_address):
-    """Che địa chỉ email để chỉ hiện 2 ký tự đầu và 5 ký tự cuối"""
-    username, domain = email_address.split('@')
-    if len(username) > 7:
-        masked_username = username[:2] + '****' + username[-1:]
-    else:
-        masked_username = username[:2] + '****'
-    masked_email = masked_username + '@' + domain
-    return masked_email
+    try:
+        username, domain = email_address.split('@')
+        if len(username) > 7:
+            return f"{username[:2]}****{username[-1]}@{domain}"
+        return f"{username[:2]}****@{domain}"
+    except:
+        return email_address
 
 def open_link_with_selenium(link, recipient_email, chat_id):
-    """Mở Selenium và nhấp nút để xác nhận kết nối"""
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    driver = webdriver.Remote(
-        command_executor='http://netflix_watcher_selenium:4444/wd/hub',
-        options=options
-    )
-
+    driver = None
     try:
+        driver = get_selenium_driver()
         driver.get(link)
-        WebDriverWait(driver, 10).until(
+        
+        # Chờ nút xác nhận
+        WebDriverWait(driver, 15).until(
             EC.element_to_be_clickable((By.CSS_SELECTOR, '[data-uia="set-primary-location-action"]'))
         ).click()
-        masked_email = mask_email(recipient_email)
-        message = f'Đã tự động cập nhật Hộ Gia Đình thành công cho {masked_email}'
-        logger.info(message)
-        send_telegram_message(chat_id, message)
-    except TimeoutException as e:
-        message = f"Lỗi: {e}"
-        logger.error(message)
-        send_telegram_message(TELEGRAM_ADMIN_UID, message)
+        
+        masked = mask_email(recipient_email)
+        msg = f'✅ Đã tự động cập nhật Hộ Gia Đình cho {masked}'
+        logger.info(msg)
+        send_telegram_message(chat_id, msg)
+        
+    except Exception as e:
+        msg = f"❌ Lỗi Selenium (Update Primary Location): {e}"
+        logger.error(msg)
+        send_telegram_message(TELEGRAM_ADMIN_UID, msg)
     finally:
-        driver.quit()
+        if driver: driver.quit()
 
 def handle_temporary_access_code(link, recipient_email, chat_id):
-    """Mở Selenium và lấy mã OTP từ liên kết"""
-    options = webdriver.ChromeOptions()
-    options.add_argument("--headless")
-    driver = webdriver.Remote(
-        command_executor='http://netflix_watcher_selenium:4444/wd/hub',
-        options=options
-    )
-
+    driver = None
     try:
+        driver = get_selenium_driver()
         driver.get(link)
-        otp_element = WebDriverWait(driver, 10).until(
+        
+        otp_element = WebDriverWait(driver, 15).until(
             EC.presence_of_element_located((By.CSS_SELECTOR, '[data-uia="travel-verification-otp"]'))
         )
         otp_code = otp_element.text
-        masked_email = mask_email(recipient_email)
-        message = f'Mã OTP tạm thời cho {masked_email} là: {otp_code}'
-        logger.info(message)
-        send_telegram_message(chat_id, message)
-    except TimeoutException as e:
-        message = f"Lỗi: {e}"
-        logger.error(message)
-        send_telegram_message(TELEGRAM_ADMIN_UID, message)
-    except WebDriverException as e:
-        message = f"Lỗi WebDriver: {e}"
-        logger.error(message)
-        send_telegram_message(TELEGRAM_ADMIN_UID, message)
+        
+        masked = mask_email(recipient_email)
+        msg = f'🔑 Mã OTP tạm thời cho {masked} là: {otp_code}'
+        logger.info(msg)
+        send_telegram_message(chat_id, msg)
+        
+    except Exception as e:
+        msg = f"❌ Lỗi Selenium (Get Temp Code): {e}"
+        logger.error(msg)
+        send_telegram_message(TELEGRAM_ADMIN_UID, msg)
     finally:
-        driver.quit()
-
+        if driver: driver.quit()
 
 def extract_transaction_details(body):
-    """Trích xuất chi tiết giao dịch từ nội dung email."""
-    transaction_details = {}
-
-    # Trích xuất số tiền tăng
-    amount_increased_match = re.search(r"vừa tăng ([\d,.]+) VND", body)
-    if amount_increased_match:
-        transaction_details["amount_increased"] = amount_increased_match.group(1)
-
-    # Trích xuất số tiền giảm
-    amount_decreased_match = re.search(r"vừa giảm ([\d,.]+) VND", body)
-    if amount_decreased_match:
-        transaction_details["amount_decreased"] = amount_decreased_match.group(1)
-
-    # Lấy thời gian giao dịch
+    details = {}
+    # Regex tìm tiền
+    inc = re.search(r"vừa tăng ([\d,.]+) VND", body)
+    if inc: details["amount_increased"] = inc.group(1)
+    
+    dec = re.search(r"vừa giảm ([\d,.]+) VND", body)
+    if dec: details["amount_decreased"] = dec.group(1)
+    
+    # Regex tìm thời gian
     time_match = re.search(r"vào (\d{2}/\d{2}/\d{4} \d{2}:\d{2})", body)
-    if time_match:
-        transaction_details["time"] = time_match.group(1)
-
-        # Chuyển đổi sang định dạng ISO 8601
-        try:
-            datetime_object = datetime.strptime(transaction_details["time"], "%d/%m/%Y %H:%M") # Định dạng thời gian gốc
-            transaction_details["time"] = datetime_object.isoformat() + "+07:00"  # Thêm '+07:00' cho múi giờ Việt Nam
-        except ValueError:
-            logger.info("Lỗi: Định dạng thời gian không hợp lệ.")
-
-    # Trích xuất số dư hiện tại
-    current_balance_match = re.search(r"Số dư hiện tại: ([\d,.]+) VND", body)
-    if current_balance_match:
-        transaction_details["current_balance"] = current_balance_match.group(1)
-
-    # Trích xuất mô tả giao dịch
-    description_match = re.search(r"Mô tả: (.+)", body)
-    if description_match:
-        transaction_details["description"] = description_match.group(1).split("</p>")[0]
-
-    return transaction_details
-
+    if time_match: details["time"] = time_match.group(1)
+    
+    curr = re.search(r"Số dư hiện tại: ([\d,.]+) VND", body)
+    if curr: details["current_balance"] = curr.group(1)
+    
+    desc = re.search(r"Mô tả: (.+)", body)
+    if desc: details["description"] = desc.group(1).split("</p>")[0]
+    
+    return details
 
 def process_netflix_email(body, recipient_email, chat_id):
-    """Xử lý email từ Netflix"""
     if 'Enter this code to sign in' in body or 'Nhập mã này để đăng nhập' in body:
-        logger.info("Trích xuất mã đăng nhập")
-        otpcode = extract_codes(body)
-        if otpcode:
-            masked_email = mask_email(recipient_email)
-            message = f'Mã OTP cho {masked_email} là: {otpcode}'
-            logger.info(message)
-            send_telegram_message(chat_id, message)
+        otp = extract_codes(body)
+        if otp:
+            masked = mask_email(recipient_email)
+            msg = f'🏠 Mã OTP Login cho {masked}: {otp}'
+            logger.info(msg)
+            send_telegram_message(chat_id, msg)
     else:
         links = extract_links(body)
         for link in links:
@@ -230,103 +201,106 @@ def process_netflix_email(body, recipient_email, chat_id):
                 handle_temporary_access_code(link, recipient_email, chat_id)
 
 def process_cake_email(body):
-    """Xử lý email từ Cake"""
-    if 'Tài khoản Spend Account vừa tăng' in body:
-        logger.info("Trích xuất chi tiết giao dịch")
-        transaction_details = extract_transaction_details(body)
-        if transaction_details:
-            message = (
-                f"Số tiền tăng: {transaction_details.get('amount_increased', 'Không rõ')}\n"
-                f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
-                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}\n"
-                f"Thời gian giao dịch: {transaction_details.get('time', 'Không rõ')}"
-            )
-            logger.info(message)
-            send_telegram_message(TELEGRAM_ADMIN_UID, message)
-    elif 'Tài khoản Spend Account vừa giảm' in body:
-        logger.info("Trích xuất chi tiết giao dịch")
-        transaction_details = extract_transaction_details(body)
-        if transaction_details:
-            message = (
-                f"Số tiền giảm: {transaction_details.get('amount_decreased', 'Không rõ')}\n"
-                f"Số dư hiện tại: {transaction_details.get('current_balance', 'Không rõ')}\n"
-                f"Mô tả giao dịch: {transaction_details.get('description', 'Không rõ')}\n"
-                f"Thời gian giao dịch: {transaction_details.get('time', 'Không rõ')}"
-            )
-            logger.info(message)
-            send_telegram_message(TELEGRAM_ADMIN_UID, message)
+    details = extract_transaction_details(body)
+    if not details: return
+
+    msg = ""
+    if 'amount_increased' in details:
+        msg = f"💰 CAKE TĂNG: {details['amount_increased']}\n"
+    elif 'amount_decreased' in details:
+        msg = f"💸 CAKE GIẢM: {details['amount_decreased']}\n"
+    
+    if msg:
+        msg += f"Số dư: {details.get('current_balance', '?')}\n"
+        msg += f"ND: {details.get('description', '?')}\n"
+        msg += f"Lúc: {details.get('time', '?')}"
+        send_telegram_message(TELEGRAM_ADMIN_UID, msg)
 
 def fetch_last_unseen_email():
-    """Lấy nội dung của email chưa đọc cuối cùng từ hộp thư đến"""
+    """Lấy email chưa đọc và xử lý"""
     mail = imaplib.IMAP4_SSL(EMAIL_IMAP)
     try:
         mail.login(EMAIL_LOGIN, EMAIL_PASSWORD)
         mail.select("inbox")
 
-        # Gộp danh sách email sender
         all_senders = []
-        if ENABLE_NETFLIX_MODULE:
-            all_senders.extend(NETFLIX_EMAIL_SENDERS)
-        if ENABLE_CAKE_MODULE:
-            all_senders.extend(CAKE_EMAIL_SENDERS)
+        if ENABLE_NETFLIX_MODULE: all_senders.extend(NETFLIX_EMAIL_SENDERS)
+        if ENABLE_CAKE_MODULE: all_senders.extend(CAKE_EMAIL_SENDERS)
 
         for sender in all_senders:
-            _, email_ids = mail.search(None, f'(UNSEEN FROM "{sender}")')
-            email_ids = email_ids[0].split()
-            if email_ids:
-                email_id = email_ids[-1]
-                _, msg_data = mail.fetch(email_id, "(RFC822)")
-                msg = email.message_from_bytes(msg_data[0][1])
-                logger.info(f'Phát hiện email mới từ {sender}')
-                recipient_email = email.utils.parseaddr(msg['To'])[1]
-                subject = str(email.header.make_header(email.header.decode_header(msg['Subject'])))
+            if not sender: continue # Bỏ qua sender rỗng
 
-                # Xác định loại email
-                email_type = None
-                if sender in NETFLIX_EMAIL_SENDERS and ENABLE_NETFLIX_MODULE:
-                    email_type = 'netflix'
-                elif sender in CAKE_EMAIL_SENDERS and ENABLE_CAKE_MODULE:
-                    email_type = 'cake'
+            # Tìm kiếm email chưa đọc
+            status, data = mail.search(None, f'(UNSEEN FROM "{sender}")')
+            
+            # --- FIX QUAN TRỌNG: Kiểm tra dữ liệu trả về ---
+            if status != 'OK' or not data or not data[0]:
+                continue
+                
+            email_ids = data[0].split()
+            if not email_ids:
+                continue
+            # -----------------------------------------------
 
-                # Xử lý theo loại email
-                if email_type:
-                    recipients = get_recipients_from_spreadsheet()
-                    chat_id = None
-                    if email_type == 'netflix':
-                        for recipient in recipients:
-                            if recipient['email'] == recipient_email:
-                                chat_id = recipient['telegram_id']
-                                break
-                    elif email_type == 'cake':
-                        chat_id = TELEGRAM_ADMIN_UID  # Gửi thông báo Cake cho admin
+            # Lấy email mới nhất
+            latest_email_id = email_ids[-1]
+            status, msg_data = mail.fetch(latest_email_id, "(RFC822)")
+            
+            if status != 'OK' or not msg_data:
+                logger.error(f"Không thể fetch email ID: {latest_email_id}")
+                continue
 
-                    if chat_id:
-                        if msg.is_multipart():
-                            for part in msg.walk():
-                                content_type = part.get_content_type()
-                                if "text/plain" in content_type or "text/html" in content_type:
-                                    body = part.get_payload(decode=True).decode()
-                                    if email_type == 'netflix':
-                                        process_netflix_email(body, recipient_email, chat_id)
-                                    elif email_type == 'cake':
-                                        process_cake_email(body)
-                        else:
-                            body = msg.get_payload(decode=True).decode()
-                            if email_type == 'netflix':
-                                process_netflix_email(body, recipient_email, chat_id)
-                            elif email_type == 'cake':
-                                process_cake_email(body)
+            raw_email = msg_data[0][1]
+            msg = email.message_from_bytes(raw_email)
+            
+            # Parse thông tin
+            recipient_header = msg['To'] or ""
+            recipient_email = email.utils.parseaddr(recipient_header)[1]
+            logger.info(f"📩 Email mới từ: {sender} -> {recipient_email}")
+
+            # Lấy Body
+            body = ""
+            if msg.is_multipart():
+                for part in msg.walk():
+                    if part.get_content_type() in ["text/plain", "text/html"]:
+                        payload = part.get_payload(decode=True)
+                        if payload: body = payload.decode(errors='ignore')
+            else:
+                payload = msg.get_payload(decode=True)
+                if payload: body = payload.decode(errors='ignore')
+
+            # Xử lý Logic
+            if sender in NETFLIX_EMAIL_SENDERS and ENABLE_NETFLIX_MODULE:
+                recipients = get_recipients_from_spreadsheet()
+                chat_id = next((r['telegram_id'] for r in recipients if r['email'] == recipient_email), None)
+                
+                if chat_id:
+                    process_netflix_email(body, recipient_email, chat_id)
+                else:
+                    logger.warning(f"Không tìm thấy Chat ID cho email: {recipient_email}")
+
+            elif sender in CAKE_EMAIL_SENDERS and ENABLE_CAKE_MODULE:
+                process_cake_email(body)
+
+    except imaplib.IMAP4.error as e:
+        logger.error(f"Lỗi IMAP: {e}")
     except Exception as e:
-        message = f"Lỗi khi xử lý email: {e}"
-        logger.error(message)
-        send_telegram_message(TELEGRAM_ADMIN_UID, message)
+        logger.error(f"Lỗi không mong muốn: {e}")
     finally:
-        mail.logout()
+        try:
+            mail.close()
+            mail.logout()
+        except:
+            pass
 
 if __name__ == "__main__":
-    logger.info(f'KHỞI TẠO THÀNH CÔNG - ver 4.5')
-    logger.info(f'NETFLIX MODULE: {"BẬT" if ENABLE_NETFLIX_MODULE else "TẮT"}')
-    logger.info(f'CAKE MODULE: {"BẬT" if ENABLE_CAKE_MODULE else "TẮT"}')
+    logger.info(f'🚀 APP STARTED - Selenium Host: {SELENIUM_HOST}')
+    logger.info(f'NETFLIX MODULE: {"ON" if ENABLE_NETFLIX_MODULE else "OFF"}')
+    logger.info(f'CAKE MODULE: {"ON" if ENABLE_CAKE_MODULE else "OFF"}')
+    
     while True:
-        fetch_last_unseen_email()
+        try:
+            fetch_last_unseen_email()
+        except Exception as e:
+            logger.critical(f"Lỗi vòng lặp chính: {e}")
         time.sleep(20)
